@@ -122,6 +122,7 @@ class PNet(object):
         self.losses = {}
         self.zerolowerbound = zerolowerbound
         self.rulenumber = 1
+        self.edges = []
     
     def add_places(self, place_name, tokens):
         '''!
@@ -172,13 +173,15 @@ class PNet(object):
                                      for loc in movement]
                     d['value'] = float(t[1])
                     d['delay'] = int(t[2])
+                    self.edges.append( (d['movement'][0][0],d['movement'][1][0]) )
                 if rule_type == 'incubate':
                     d['value'] = float(t[0])
                     movement = [x.strip() for x in t[1].split('->')]
                     d['movement'] = [(loc.split('.')[0], loc.split('.')[1]) 
                                      for loc in movement]
                     d['conditions'] = [cond for cond in t[2:]]
-                    d['timer'] = 0
+                    d['timer'] = []
+                    self.edges.append( (d['movement'][0][0],d['movement'][1][0]) )
                 if rule_type == 'ratio':
                     movement = [x.strip() for x in t[0].split('->')]
                     d['movement'] = [(loc.split('.')[0], loc.split('.')[1]) 
@@ -198,6 +201,7 @@ class PNet(object):
                 d['function'] = actions[1]
                 d['conditions'] = [cond.strip() 
                                    for cond in actions[2].split(';')]
+                self.edges.append( (d['movement'][0][0],d['movement'][1][0]) )
             self.rules[rule_name + '_' + str(self.rulenumber)] = d
             self.rulenumber = self.rulenumber + 1
         
@@ -301,7 +305,6 @@ class PNet(object):
             test[i] = self._test_condition(source_place, source_value, 
                                            operator, criterion)
         return test
-        
     def _incubate_rule(self, rule, interval):
         '''!
         Private method which simulates an incubate rule action.
@@ -314,10 +317,22 @@ class PNet(object):
         timer = rule['timer']
         conditions = rule['conditions']
         movement = rule['movement']
+        source_place = self.places[movement[0][0]]
+        source_value = movement[0][1]
+        token_num = source_place.attributes[source_value]
+        # check to see if len(timer)==source.value
+        # delete oldest timers if source value is less than
+        # add to timer (newest) if source value is greater
+        token_dif = int(token_num - len(timer))
+        if token_dif < 0:
+            del timer[0:(-1*token_dif)]
+        elif token_dif > 0:
+            timer.extend([0]*token_dif)
         test = self._conditions_processor(conditions)
         if len(['failed' for t in test if t == 'failed']) == 0:
-            if (timer + interval) < value:
-                rule['timer'] = timer + interval
+            token_to = len([t for t in timer if t>=value]) #num that have timed out
+            if token_to == 0:
+                rule['timer'] = [sum(i) for i in zip(timer,[interval]*len(timer))]
             else:
                 source_place = self.places[movement[0][0]]
                 source_value = movement[0][1]
@@ -325,9 +340,10 @@ class PNet(object):
                 destination_value = movement[1][1]
                 destination_place.attributes[destination_value] = \
                     destination_place.attributes[destination_value] + \
-                    source_place.attributes[source_value]
-                source_place.attributes[source_value] = 0
-                rule['timer'] = 0
+                    token_to
+                source_place.attributes[source_value] = source_place.attributes[source_value] - token_to
+                timer = [t for t in timer if t<value]
+                rule['timer'] = [sum(i) for i in zip(timer,[interval]*len(timer))]
         return rule
     
     def _ratio_rule(self, movement, ratio, limit_check, 
@@ -541,11 +557,12 @@ class PNet(object):
             return (placetokens, tokenvalues)
         else:
             timelist = list(self.report.keys())
+            edges = self.edges
             datalist = [0] * len(timelist)
             for i in range(len(timelist)):
                 placetokens = list(self.report[timelist[i]].keys())
                 tokenvalues = [self.report[timelist[i]][k] 
                                for k in placetokens]
                 datalist[i] = (timelist[i], placetokens, tokenvalues)
-            return datalist
+            return datalist, edges
         
