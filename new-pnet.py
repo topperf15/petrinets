@@ -27,6 +27,30 @@ net.add_trans('t2', {'in':['p3'],'out':['p4','p5']})
 # simulate the net - run specified number of steps
 net.simulate(2)
 
+edges = []
+for tname in net.trans.keys():
+    x = net.trans[tname]
+    pin = x.attributes['in']
+    pout = x.attributes['out']
+    
+    for name in pin:
+        edges.append((name,tname))
+    for name in pout:
+        edges.append((tname,name))
+
+
+# importing networkx
+import networkx as nx
+# importing matplotlib.pyplot
+import matplotlib.pyplot as plt
+
+g = nx.DiGraph()
+#g.add_nodes_from([d['movement'][0][0],d['movement'][1][0]])
+g.add_edges_from(edges)
+pos = nx.kamada_kawai_layout(g)
+nx.draw_networkx(g,pos,arrows=True,with_labels=True)
+plt.savefig("filename.png")
+
 # write markings to file
 headers = ['time']+list(net.places.keys())
 f = open('flight.csv', 'w') 
