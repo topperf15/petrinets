@@ -64,29 +64,22 @@ class GPN(object):
         
     def _get_marking(self):
         marking = {}
-        # a_marking = {}
+        timing = {}
         for name in self.places.keys():
             marking[name] = self.places[name].mark
-            # timer = self.places[name].timer
-            # delay = self.places[name}.delay
-            # a_mark = len([t for t in timer if t>=delay]) #num that have timed out - available
-            # a_marking[name] = a_mark
-        
-        return marking  # also return avail marking (a_marking)
+            timing[name] = self.places[name].timer
+        return marking, timing
     
-    def _set_marking(self, delta):
+    def _set_marking(self, marking_prime):
         for name in self.places.keys():
-            self.places[name].mark += delta[name]
-        #self._store_marking(clock, marking_prime)
+            self.places[name].mark = marking_prime[name]
+            # self.places[name].timer = timing_prime[name]
         
     def _store_marking(self, clock, marking):
         self.markings[str(clock)] = list(marking.values())
         
-    def _step(self,marking):
+    def _step(self,marking_prime,marking): # add timing_prime, timing
         # loop through the transitions by name
-        delta = {}
-        for name in self.places.keys():
-            delta[name] = 0
         for tname in self.trans.keys():
             x = self.trans[tname]       # transition
             pin = x.attributes['in']    # input places list
@@ -98,25 +91,38 @@ class GPN(object):
             # at each input place to fire the transtion (True)
             test = True
             for name in pin:
+                # din = self.places[name].delay # delay for each pin
+                # timer = self.places[name].timer # timer list at pin
+                # timer = timing[name] # timer list at pin
+                # a_token = len([t for t in timer if t>=din]) #num that have timed out - available
+                # test = test and a_token >= fin[pin.index(name)]
+                
                 test = test and marking[name] >= fin[pin.index(name)]
-                #print(marking[name],fin[pin.index(name)],test)
+                # print(marking[name],fin[pin.index(name)],test)
             if test==True:
                 for name in pin:
-                    delta[name] -= fin[pin.index(name)]
-                    #print(marking_prime[name])
+                    marking_prime[name] -= fin[pin.index(name)]
+                    # and update the timer list
+                    # del timer[0:fin[pin.index(name)]]
+                    # timing_prime[name] = timer
+                    # print(marking_prime[name])
                 for name in pout:
-                    delta[name] += fout[pout.index(name)]
-        return delta
+                    marking_prime[name] += fout[pout.index(name)]
+                    # and update the timer list
+                    # timer.extend([0]*fout[pout.index(name))
+                    # timing_prime[name] = timer
+        return marking_prime # , timing_prime
     
     def simulate(self, steps):
         # get and store and intial marking
-        marking = self._get_marking()
+        marking, timing = self._get_marking()
         self._store_marking(0, marking)
         clock = 1
         while clock <= steps:
-            marking = self._get_marking()
+            marking, timing = self._get_marking()
             marking_prime = marking.copy()
-            delta = self._step(marking)
-            self._set_marking(delta)
+            # timing_prime = timing.copy()
+            marking_prime = self._step(marking_prime, marking) # ,timing_prime, timing
+            self._set_marking(marking_prime) #, timing_prime
             self._store_marking(clock, marking_prime)
             clock += 1
