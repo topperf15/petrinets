@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Apr 10 20:20:47 2024
-
+Updates on Cinco de Maio 2024
 @author: andrew_s
 """
 class Place(object):
@@ -47,12 +47,13 @@ class GPN(object):
         self.trans = {}
         self.markings = {}
     
-    def add_places(self, place_name, tokens, delay=0):
+    def add_places(self, place_name, tokens, times, delay=0):
         '''!
         Method to add a place/container into the Petri Net.
         '''
         self.places[place_name] = Place(place_name,tokens)
-        self.places[place_name].timer = [0]*tokens
+        self.places[place_name].timer = times
+        self.places[place_name].delay = delay
 
     def add_trans(self, trans_name, attrib, func):
         '''!
@@ -68,18 +69,20 @@ class GPN(object):
         for name in self.places.keys():
             marking[name] = self.places[name].mark
             timing[name] = self.places[name].timer
-        return marking, timing
+        return marking , timing
     
-    def _set_marking(self, marking_prime):
+    def _set_marking(self, marking_prime, timing_prime):
         for name in self.places.keys():
             self.places[name].mark = marking_prime[name]
-            # self.places[name].timer = timing_prime[name]
+            self.places[name].timer = timing_prime[name]
         
     def _store_marking(self, clock, marking):
-        self.markings[str(clock)] = list(marking.values())
+        self.markings[str(clock)] = tuple(marking.values())
         
-    def _step(self,marking_prime,marking): # add timing_prime, timing
+    def _step(self,marking,timing): # add timing_prime, timing
         # loop through the transitions by name
+        marking_prime = marking.copy()
+        timing_prime = timing.copy()
         for tname in self.trans.keys():
             x = self.trans[tname]       # transition
             pin = x.attributes['in']    # input places list
@@ -91,38 +94,40 @@ class GPN(object):
             # at each input place to fire the transtion (True)
             test = True
             for name in pin:
-                # din = self.places[name].delay # delay for each pin
-                # timer = self.places[name].timer # timer list at pin
+                din = self.places[name].delay # delay for each pin
+                tin = self.places[name].timer # timer list at pin
                 # timer = timing[name] # timer list at pin
-                # a_token = len([t for t in timer if t>=din]) #num that have timed out - available
-                # test = test and a_token >= fin[pin.index(name)]
+                a_token = len([t for t in tin if t>=din]) #num that have timed out - available
+                test = test and a_token >= fin[pin.index(name)]
                 
-                test = test and marking[name] >= fin[pin.index(name)]
+                # test = test and marking[name] >= fin[pin.index(name)]
                 # print(marking[name],fin[pin.index(name)],test)
             if test==True:
                 for name in pin:
                     marking_prime[name] -= fin[pin.index(name)]
                     # and update the timer list
                     # del timer[0:fin[pin.index(name)]]
-                    # timing_prime[name] = timer
+                    timing_prime[name] = timing_prime[name][fin[pin.index(name)]:]
                     # print(marking_prime[name])
                 for name in pout:
                     marking_prime[name] += fout[pout.index(name)]
                     # and update the timer list
                     # timer.extend([0]*fout[pout.index(name))
-                    # timing_prime[name] = timer
-        return marking_prime # , timing_prime
+                    timing_prime[name] = timing_prime[name] + [0]*fout[pout.index(name)]
+        for name in self.places.keys():
+            timing_prime[name] = [x+1 for x in timing_prime[name]]
+        return marking_prime , timing_prime
     
     def simulate(self, steps):
         # get and store and intial marking
-        marking, timing = self._get_marking()
+        marking, timing= self._get_marking()
         self._store_marking(0, marking)
         clock = 1
         while clock <= steps:
             marking, timing = self._get_marking()
-            marking_prime = marking.copy()
+            #marking_prime = marking.copy()
             # timing_prime = timing.copy()
-            marking_prime = self._step(marking_prime, marking) # ,timing_prime, timing
-            self._set_marking(marking_prime) #, timing_prime
+            marking_prime, timing_prime = self._step(marking,timing) # ,timing_prime, timing
+            self._set_marking(marking_prime, timing_prime) #, timing_prime
             self._store_marking(clock, marking_prime)
             clock += 1
