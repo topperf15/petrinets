@@ -60,7 +60,6 @@ class GPN(object):
             if test==True:
                 for name in pin:
                     marking_prime[name] -= 1
-                    #print(marking_prime[name])
                 for name in pout:
                     marking_prime[name] += 1
         return marking_prime
